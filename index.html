@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AAYU CLOTHING — Billing</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="firm-block" id="firmBlock">
+      <div class="firm-avatar" id="firmAvatar">AC</div>
+      <div class="firm-meta">
+        <div class="firm-name" id="firmName">AAYU CLOTHING</div>
+        <div class="firm-sub" id="firmPhone">9741907127</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <a data-view="dashboard" class="active"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9h13v-9"/></svg><span>Home</span></a>
+      <a data-view="parties"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><path d="M15.5 5.6a3.2 3.2 0 0 1 0 4.9M17.8 14.4c1.5.8 2.4 2.3 2.7 4.6"/></svg><span>Parties</span></a>
+      <a data-view="items"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v10l-8 4-8-4V7z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg><span>Items</span></a>
+      <a data-view="sale"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-2-1.5L14 21l-2-1.5L10 21l-2-1.5L6 21z"/><path d="M9 8h6M9 12h6"/></svg><span>Sale Invoices</span></a>
+      <a data-view="purchase"><svg viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.6"/><circle cx="17" cy="20" r="1.6"/><path d="M3 4h2.5l2.2 11h9.8L20 7H7"/></svg><span>Purchase</span></a>
+      <a data-view="expenses"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/></svg><span>Expenses</span></a>
+      <a data-view="cashbank"><svg viewBox="0 0 24 24"><path d="M12 3 3 8h18z"/><path d="M5 8v8M9.5 8v8M14.5 8v8M19 8v8M3 19h18"/></svg><span>Cash &amp; Bank</span></a>
+      <a data-view="reports"><svg viewBox="0 0 24 24"><path d="M4 20V9M10 20V4M16 20v-8M21 20H3"/></svg><span>Reports</span></a>
+      <a data-view="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.5a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7 7 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.5h4l.4-2.5a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.06-.4.1-.8.1-1.2z"/></svg><span>Settings</span></a>
+    </nav>
+    <div class="sidebar-foot">Data from Vyapar backup<br>12 Aug 2026</div>
+  </aside>
+
+  <!-- ============ TOPBAR + MAIN ============ -->
+  <div class="body">
+    <header class="topbar">
+      <div class="search-wrap">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg>
+        <input id="globalSearch" type="text" placeholder="Search parties, items, invoices…" autocomplete="off">
+        <div class="search-results" id="searchResults"></div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-red" id="btnAddSale">＋ Add Sale</button>
+        <button class="btn btn-outline-blue" id="btnAddPurchase">＋ Add Purchase</button>
+      </div>
+    </header>
+
+    <main class="main" id="main">
+      <section id="view-dashboard" class="view active"></section>
+      <section id="view-parties" class="view"></section>
+      <section id="view-items" class="view"></section>
+      <section id="view-sale" class="view"></section>
+      <section id="view-purchase" class="view"></section>
+      <section id="view-expenses" class="view"></section>
+      <section id="view-cashbank" class="view"></section>
+      <section id="view-reports" class="view"></section>
+      <section id="view-settings" class="view"></section>
+    </main>
+  </div>
+</div>
+
+<!-- ============ MODAL ROOT ============ -->
+<div class="modal-backdrop" id="modalBackdrop"><div class="modal" id="modalBox"></div></div>
+
+<!-- ============ FULL-SCREEN TXN FORM ============ -->
+<div class="txn-overlay" id="txnOverlay"></div>
+
+<!-- ============ PRINT AREA ============ -->
+<div id="printArea"></div>
+
+<div class="toast" id="toast"></div>
+
+<script src="data.enc.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
