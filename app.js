@@ -838,7 +838,7 @@ function renderTxnForm() {
         <div class="field"><label>Phone</label><input value="${esc(txn.partyId ? (partyById(txn.partyId)?.phone || '') : '')}" disabled></div>
         <div class="field"><label>Date</label><input type="date" value="${txn.date}" onchange="txn.date=this.value;renderTxnForm()"></div>
       </div>
-      <table class="lines">
+      <div class="lines-wrap"><table class="lines">
         <thead><tr><th style="width:38%">Item</th><th style="width:10%">Qty</th><th style="width:9%">Unit</th><th style="width:13%">Rate (incl. GST)</th><th style="width:10%">GST %</th><th style="width:14%;text-align:right">Amount</th><th></th></tr></thead>
         <tbody>
         ${txn.lines.map((l, i) => `<tr>
@@ -852,7 +852,7 @@ function renderTxnForm() {
           <td><button class="rm" onclick="txn.lines.splice(${i},1);if(!txn.lines.length)addLine();renderTxnForm()" title="Remove">×</button></td>
         </tr>`).join('')}
         </tbody>
-      </table>
+      </table></div>
       <button class="btn btn-outline btn-sm add-line" onclick="addLine();renderTxnForm();setTimeout(()=>document.getElementById('li_'+(txn.lines.length-1)).focus(),40)">＋ Add Row (or press Enter in Rate)</button>
       <div class="txn-bottom">
         <div></div>
@@ -877,6 +877,16 @@ function renderTxnForm() {
 }
 function setLine(i, k, v) { const l = txn.lines[i]; l[k] = v; l.amount = +(l.qty * l.rate).toFixed(2); renderTxnForm(); }
 
+// On phones the dropdown escapes its narrow table cell and spans the screen
+function positionDrop(drop, anchor) {
+  if (window.innerWidth > 700) { drop.style.cssText = ''; return; }
+  const r = anchor.getBoundingClientRect();
+  drop.style.position = 'fixed';
+  drop.style.left = '10px'; drop.style.right = '10px';
+  drop.style.top = Math.min(r.bottom + 4, window.innerHeight * 0.5) + 'px';
+  drop.style.maxHeight = '45vh';
+  drop.style.zIndex = 120;
+}
 function partyPick(q) {
   txn.partyName = q; txn.partyId = null;
   const drop = $('#partyDrop'); const ql = q.toLowerCase();
@@ -884,6 +894,7 @@ function partyPick(q) {
   drop.innerHTML = hits.map(p => `<div class="pd-item" onmousedown="chooseParty(${p.id})"><span>${esc(p.name)}</span><span class="m">${esc(p.phone)}</span></div>`).join('') +
     (q.trim() && !hits.some(h => h.name.toLowerCase() === ql) ? `<div class="pd-new" onmousedown="quickAddParty()">＋ Add "${esc(q.trim())}" as new party</div>` : '');
   drop.classList.toggle('open', !!(hits.length || q.trim()));
+  positionDrop(drop, $('#tx_party'));
 }
 function chooseParty(id) { const p = partyById(id); txn.partyId = id; txn.partyName = p.name; renderTxnForm(); setTimeout(() => $('#li_0')?.focus(), 40); }
 function quickAddParty() {
@@ -900,6 +911,7 @@ function itemPick(i, q) {
   drop.innerHTML = hits.map(it => `<div class="pd-item" onmousedown="chooseItem(${i},${it.id})"><span>${esc(it.name)}</span><span class="m">${fmtM(it.salePrice)} · stk ${it.stock}</span></div>`).join('') +
     (q.trim() && !hits.some(h => h.name.toLowerCase() === ql) ? `<div class="pd-new" onmousedown="quickAddItem(${i})">＋ Add "${esc(q.trim())}" as new item</div>` : '');
   drop.classList.toggle('open', !!(hits.length || q.trim()));
+  positionDrop(drop, $('#li_' + i));
 }
 function chooseItem(i, itemId) {
   const it = itemById(itemId), l = txn.lines[i];

@@ -319,10 +319,29 @@ table.iv-items { width: 100%; border-collapse: collapse; font-size: 12.5px; colo
 .toast.show { transform: translateX(-50%) translateY(0); }
 
 /* ================= RESPONSIVE ================= */
+.lines-wrap { position: relative; }
 @media (max-width: 980px) {
   .app { grid-template-columns: 64px 1fr; }
   .firm-meta, .nav a span, .sidebar-foot { display: none; }
   .nav a { justify-content: center; padding: 13px 0; }
   .stat-row { grid-template-columns: 1fr 1fr; }
   .dash-grid, .split, .settings-grid, .txn-top, .txn-bottom { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+  body { font-size: 15px; }
+  .main { padding: 14px 12px 40px; }
+  .topbar { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
+  .topbar-actions { margin-left: 0; }
+  table.tbl { font-size: 14px; }
+  .tbl th, .tbl td { padding: 11px 10px; }
+  /* line-items table scrolls sideways instead of crushing its columns */
+  .lines-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.lines { min-width: 720px; }
+  /* 16px inputs stop iOS auto-zoom and are finger-friendly */
+  .field input, .field select, .field textarea, .lines input, .lines select,
+  .filter-bar input, .filter-bar select, .plist-search input, .trow input,
+  .search-wrap input, .lock-card input { font-size: 16px; }
+  .picker-drop .pd-item, .picker-drop .pd-new { padding: 13px 14px; font-size: 15px; }
+  .txn-body { padding: 14px 12px; }
+  .party-list { max-height: 320px; }
 }
