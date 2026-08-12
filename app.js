@@ -290,6 +290,7 @@ renderers.parties = function () {
           <div class="actions">
             <button class="btn btn-outline btn-sm" onclick="partyForm(${p.id})">Edit</button>
             <button class="btn btn-outline btn-sm" onclick="exportPartyCSV(${p.id})">⬇ Statement</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red)" onclick="deleteParty(${p.id})">Delete</button>
             <button class="btn btn-red btn-sm" onclick="openTxnForm('sale',${p.id})">＋ Sale</button>
           </div>
         </div>
@@ -326,6 +327,15 @@ function saveParty(id) {
   else { const nid = nextId(db.parties); db.parties.push({ id: nid, name, createdAt: todayISO(), lastTxn: '', ...data }); selParty = nid; }
   db.parties.sort((a, b) => a.name.localeCompare(b.name));
   persist(); closeModal(); toast('Party saved'); renderers.parties && showView('parties');
+}
+function deleteParty(id) {
+  const p = partyById(id); if (!p) return;
+  const n = db.invoices.filter(i => i.partyId === id).length + db.purchases.filter(i => i.partyId === id).length;
+  const msg = `Delete party "${p.name}"?` + (n ? `\n\nThey have ${n} invoice(s). The invoices stay in the app with the name as recorded — only the party's details and ledger view are removed.` : '');
+  if (!confirm(msg)) return;
+  db.parties = db.parties.filter(x => x.id !== id);
+  if (selParty === id) selParty = null;
+  persist(); toast('Party deleted'); renderers.parties();
 }
 function exportPartyCSV(id) {
   const p = partyById(id);
@@ -365,9 +375,19 @@ function itemForm(id) {
       <div class="field"><label>Current Stock</label><input id="if_stock" type="number" step="0.01" value="${it?.stock ?? 0}"></div>
       <div class="field"><label>HSN Code</label><input id="if_hsn" value="${esc(it?.hsn || '')}"></div>
     </div></div>
-    <div class="modal-foot"><button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    <div class="modal-foot">
+    ${it ? `<button class="btn btn-outline" style="margin-right:auto;color:var(--red);border-color:var(--red)" onclick="deleteItem(${id})">Delete Item</button>` : ''}
+    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
     <button class="btn btn-red" onclick="saveItem(${id || 'null'})">Save</button></div>`);
   setTimeout(() => $('#if_name').focus(), 50);
+}
+function deleteItem(id) {
+  const it = itemById(id); if (!it) return;
+  const used = db.invoices.concat(db.purchases).reduce((s, i) => s + i.lines.filter(l => l.itemId === id).length, 0);
+  const msg = `Delete item "${it.name}"?` + (used ? `\n\nIt appears on ${used} invoice line(s). Those invoices keep the item as recorded — it just won't be available for new bills.` : '');
+  if (!confirm(msg)) return;
+  db.items = db.items.filter(x => x.id !== id);
+  persist(); closeModal(); toast('Item deleted'); renderers.items();
 }
 function saveItem(id) {
   const name = $('#if_name').value.trim();
