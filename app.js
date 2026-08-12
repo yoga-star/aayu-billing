@@ -2,13 +2,24 @@
 'use strict';
 
 /* ---------- store ---------- */
-const LS_KEY = 'aayu_billing_v1';
+const LS_KEY = 'aayu_billing_v2'; // v2: seed carries taxName (IGST vs GST) + bank details
 let db = loadDB();
 
+const DEFAULT_BANK = { name: 'BANK OF BARODA, BARODA MAIN BRANCH', account: '67610200002903', ifsc: 'BARB0MAINOF', holder: 'AAYU CLOTHING' };
 function loadDB() {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const d = JSON.parse(raw);
+      // migrate stores seeded before bank/signature fields existed
+      if (d.business && !d.business.bank) {
+        d.business.bank = DEFAULT_BANK;
+        d.business.signName = d.business.signName || 'Shilpa';
+        d.business.terms = d.business.terms || 'Thank you for your purchase!';
+        localStorage.setItem(LS_KEY, JSON.stringify(d));
+      }
+      return d;
+    }
   } catch (e) { console.warn('load failed', e); }
   // Plain seed (local build) — seed immediately. Encrypted build seeds via unlock screen.
   if (typeof SEED_DATA !== 'undefined') {
@@ -82,6 +93,15 @@ function fmtD(iso) {
   return `${d} ${MONTHS[m-1]} ${String(y).slice(2)}`;
 }
 function todayISO() { const d = new Date(); return d.toISOString().slice(0, 10); }
+function fmtDMY(iso) { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${d}-${m}-${y}`; }
+function fmtM2(n) { // always two decimals, Indian grouping — matches Vyapar's bill
+  n = +n || 0; const neg = n < 0; n = Math.abs(n);
+  let [i, d] = n.toFixed(2).split('.');
+  let last3 = i.slice(-3), rest = i.slice(0, -3);
+  if (rest) last3 = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + last3;
+  return (neg ? '-' : '') + '₹ ' + last3 + '.' + d;
+}
+function wordsTitle(n) { return numWords(n).replace(/\b\w/g, c => c.toUpperCase()); }
 function monthKey(iso) { return iso ? iso.slice(0, 7) : ''; }
 
 function numWords(num) { // Indian system
@@ -501,7 +521,8 @@ function reportRows(rv) {
   }
   if (rv.kind === 'tax') {
     const agg = {};
-    sales.forEach(i => { const intra = isIntraState(partyById(i.partyId)); i.lines.forEach(l => {
+    sales.forEach(i => { const partyIntra = isIntraState(partyById(i.partyId)); i.lines.forEach(l => {
+      const intra = l.taxName ? !/^IGST/i.test(l.taxName) : partyIntra;
       const k = l.taxRate + '|' + (intra ? 'intra' : 'inter');
       const a = agg[k] = agg[k] || { rate: l.taxRate, intra, taxable: 0, tax: 0 };
       a.taxable += l.amount - l.taxAmount; a.tax += l.taxAmount; }); });
@@ -570,6 +591,11 @@ renderers.settings = function () {
           <div class="field"><label>GSTIN</label><input id="sb_gstin" value="${esc(b.gstin)}"></div>
           <div class="field"><label>Invoice Prefix</label><input id="sb_prefix" value="${esc(b.invoicePrefix)}"></div>
           <div class="field full"><label>Address</label><textarea id="sb_addr">${esc(b.address)}</textarea></div>
+          <div class="field full"><label>Bank Name (on invoice)</label><input id="sb_bankname" value="${esc(b.bank?.name || '')}"></div>
+          <div class="field"><label>Bank Account No.</label><input id="sb_bankacct" value="${esc(b.bank?.account || '')}"></div>
+          <div class="field"><label>Bank IFSC</label><input id="sb_bankifsc" value="${esc(b.bank?.ifsc || '')}"></div>
+          <div class="field"><label>Account Holder</label><input id="sb_bankholder" value="${esc(b.bank?.holder || '')}"></div>
+          <div class="field"><label>Signature Name</label><input id="sb_signname" value="${esc(b.signName || '')}"></div>
         </div>
         <div class="row-btns"><button class="btn btn-red" onclick="saveBusiness()">Save Profile</button></div>
       </div>
@@ -587,7 +613,9 @@ renderers.settings = function () {
     </div>`;
 };
 function saveBusiness() {
-  Object.assign(db.business, { name: $('#sb_name').value.trim(), phone: $('#sb_phone').value.trim(), email: $('#sb_email').value.trim(), gstin: $('#sb_gstin').value.trim(), invoicePrefix: $('#sb_prefix').value.trim() || 'SR', address: $('#sb_addr').value.trim() });
+  Object.assign(db.business, { name: $('#sb_name').value.trim(), phone: $('#sb_phone').value.trim(), email: $('#sb_email').value.trim(), gstin: $('#sb_gstin').value.trim(), invoicePrefix: $('#sb_prefix').value.trim() || 'SR', address: $('#sb_addr').value.trim(),
+    bank: { name: $('#sb_bankname').value.trim(), account: $('#sb_bankacct').value.trim(), ifsc: $('#sb_bankifsc').value.trim(), holder: $('#sb_bankholder').value.trim() },
+    signName: $('#sb_signname').value.trim() });
   persist(); toast('Profile saved');
   $('#firmName').textContent = db.business.name; $('#firmPhone').textContent = db.business.phone;
   $('#firmAvatar').textContent = db.business.name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -620,40 +648,86 @@ function resetSeed() {
 /* ================= INVOICE VIEW & PRINT ================= */
 function invoiceHTML(inv, kind) {
   const b = db.business, p = partyById(inv.partyId);
+  const bank = b.bank || {};
   const intra = isIntraState(p);
   const taxable = inv.lines.reduce((s, l) => s + l.amount - l.taxAmount, 0);
+  const qtyTotal = inv.lines.reduce((s, l) => s + l.qty, 0);
+  const taxTotal = inv.lines.reduce((s, l) => s + l.taxAmount, 0);
   const taxRows = {};
-  inv.lines.forEach(l => { if (l.taxRate) { taxRows[l.taxRate] = (taxRows[l.taxRate] || 0) + l.taxAmount; } });
+  inv.lines.forEach(l => {
+    if (!l.taxRate) return;
+    const igst = l.taxName ? /^IGST/i.test(l.taxName) : !intra;
+    const k = l.taxRate + '|' + igst;
+    taxRows[k] = taxRows[k] || { rate: +l.taxRate, igst, amt: 0 };
+    taxRows[k].amt += l.taxAmount;
+  });
+  const invNo = (kind === 'purchase' ? 'PB' : b.invoicePrefix) + inv.ref;
   return `<div class="inv">
-    <div class="inv-head">
-      <div class="co"><h1>${esc(b.name)}</h1><div class="addr">${esc(b.address)}<br>Phone: ${esc(b.phone)} · ${esc(b.email)}<br>GSTIN: ${esc(b.gstin)}</div></div>
-      <div class="doc"><div class="t">${kind === 'purchase' ? 'PURCHASE BILL' : 'TAX INVOICE'}</div>
-        <div class="m">Invoice #: <b>${kind === 'purchase' ? 'PB' : esc(b.invoicePrefix)}-${esc(inv.ref)}</b><br>Date: ${fmtD(inv.date)}<br>Payment: ${esc(inv.paymentType)}</div></div>
+    <div class="iv-co">
+      <h1>${esc(b.name)}</h1>
+      <div>${esc(b.address)}</div>
+      <div><b>Phone no.:</b> ${esc(b.phone)}</div>
+      <div><b>Email:</b> ${esc(b.email)}</div>
+      <div><b>GSTIN:</b> ${esc(b.gstin)}</div>
+      <div><b>State:</b> ${esc((b.gstin || '').slice(0, 2))}-${esc(b.state)}</div>
     </div>
-    <div class="inv-bill">
-      <div><div class="lbl">Bill To</div><div class="who">${esc(inv.party)}</div>
-        <div class="meta">${p ? [p.phone, p.address, p.gstin ? 'GSTIN: ' + p.gstin : ''].filter(Boolean).map(esc).join('<br>') : ''}</div></div>
-      <div style="text-align:right"><div class="lbl">Amount</div><div class="who" style="font-size:19px">${fmtM(inv.total)}</div>
-        <div class="meta">${invStatus(inv) === 'paid' ? 'Paid in full' : 'Balance due: ' + fmtM(inv.balance)}</div></div>
+    <div class="iv-title">${kind === 'purchase' ? 'Purchase Bill' : 'Tax Invoice'}</div>
+    <div class="iv-meta">
+      <div>
+        <h3>Bill To</h3>
+        <div class="iv-who">${esc(inv.party)}</div>
+        ${p && p.address ? `<div class="iv-addr">${esc(p.address)}</div>` : ''}
+        ${p && p.phone ? `<div class="iv-addr">Contact No.: ${esc(p.phone)}</div>` : ''}
+        ${p && p.gstin ? `<div class="iv-addr">GSTIN: ${esc(p.gstin)}</div>` : ''}
+      </div>
+      <div class="iv-right">
+        <h3>Invoice Details</h3>
+        <div><b>Invoice No.:</b> ${esc(invNo)}</div>
+        <div><b>Date:</b> ${fmtDMY(inv.date)}</div>
+      </div>
     </div>
-    <table class="inv-lines">
-      <thead><tr><th>#</th><th>Item</th><th class="num">Qty</th><th class="num">Rate (incl.)</th><th class="num">GST</th><th class="num">Amount</th></tr></thead>
-      <tbody>${inv.lines.map((l, i) => `<tr><td>${i + 1}</td><td>${esc(l.name)}</td><td class="num">${l.qty} ${esc(l.unit)}</td><td class="num">${fmtM(l.rate)}</td><td class="num">${l.taxRate}%</td><td class="num">${fmtM(l.amount)}</td></tr>`).join('')}</tbody>
+    <table class="iv-items">
+      <thead><tr><th style="width:5%">#</th><th>Item name</th><th class="num">Quantity</th><th class="num">Price/ Unit</th><th class="num">GST</th><th class="num">Amount</th></tr></thead>
+      <tbody>
+        ${inv.lines.map((l, i) => `<tr>
+          <td>${i + 1}</td><td>${esc(l.name)}</td><td class="num">${l.qty}</td>
+          <td class="num">${fmtM2(l.rateExcl != null ? l.rateExcl : l.rate)}</td>
+          <td class="num">${fmtM2(l.taxAmount)}<br><span class="iv-rate">(${(l.taxRate || 0).toFixed(1)}%)</span></td>
+          <td class="num">${fmtM2(l.amount)}</td></tr>`).join('')}
+        <tr class="iv-total-row"><td></td><td><b>Total</b></td><td class="num"><b>${qtyTotal}</b></td><td></td><td class="num"><b>${fmtM2(taxTotal)}</b></td><td class="num"><b>${fmtM2(inv.total)}</b></td></tr>
+      </tbody>
     </table>
-    <div class="inv-totals"><div class="box">
-      <div class="trow muted"><span>Taxable value</span><span class="tval">${fmtM(taxable)}</span></div>
-      ${Object.entries(taxRows).map(([r, t]) => intra
-        ? `<div class="trow muted"><span>CGST ${r/2}%</span><span class="tval">${fmtM(t/2)}</span></div><div class="trow muted"><span>SGST ${r/2}%</span><span class="tval">${fmtM(t/2)}</span></div>`
-        : `<div class="trow muted"><span>IGST ${r}%</span><span class="tval">${fmtM(t)}</span></div>`).join('')}
-      ${inv.roundOff ? `<div class="trow muted"><span>Round off</span><span class="tval">${fmtM(inv.roundOff)}</span></div>` : ''}
-      <div class="trow grand"><span>Total</span><span class="tval">${fmtM(inv.total)}</span></div>
-      <div class="trow muted"><span>Received</span><span class="tval">${fmtM(inv.received)}</span></div>
-    </div></div>
-    <div class="inv-words">Amount in words: <b>${numWords(inv.total)} rupees only</b></div>
-    <div class="inv-foot">
-      <div class="terms">Thank you for your business!<br>Goods once sold will not be taken back or exchanged.</div>
-      <div class="inv-sign">${b.signature ? `<img src="${b.signature}" alt="signature">` : '<div style="height:52px"></div>'}
-        <div class="for">For ${esc(b.name)}</div><div class="as">Authorized Signatory</div></div>
+    <div class="iv-bottom">
+      <div class="iv-left">
+        <h3>Invoice Amount In Words</h3>
+        <div class="iv-words">${wordsTitle(inv.total)} Rupees only</div>
+        <h3>Terms And Conditions</h3>
+        <div>${esc(b.terms || 'Thank you for your purchase!')}</div>
+      </div>
+      <div class="iv-sum">
+        <div class="iv-srow"><span>Sub Total</span><span>${fmtM2(taxable)}</span></div>
+        ${Object.values(taxRows).map(t => t.igst
+          ? `<div class="iv-srow"><span>IGST@${t.rate.toFixed(1)}%</span><span>${fmtM2(t.amt)}</span></div>`
+          : `<div class="iv-srow"><span>CGST@${(t.rate / 2).toFixed(1)}%</span><span>${fmtM2(t.amt / 2)}</span></div><div class="iv-srow"><span>SGST@${(t.rate / 2).toFixed(1)}%</span><span>${fmtM2(t.amt / 2)}</span></div>`).join('')}
+        ${inv.roundOff ? `<div class="iv-srow"><span>Round Off</span><span>${fmtM2(inv.roundOff)}</span></div>` : ''}
+        <div class="iv-srow iv-band"><span>Total</span><span>${fmtM2(inv.total)}</span></div>
+        <div class="iv-srow"><span>Received</span><span>${fmtM2(inv.received)}</span></div>
+        <div class="iv-srow"><span>Balance</span><span>${fmtM2(inv.balance)}</span></div>
+      </div>
+    </div>
+    <div class="iv-foot">
+      ${bank.account ? `<div class="iv-payto">
+        <h3>Pay To:</h3>
+        <div><b>Bank Name:</b> ${esc(bank.name)}</div>
+        <div><b>Bank Account No.:</b> ${esc(bank.account)}</div>
+        <div><b>Bank IFSC code:</b> ${esc(bank.ifsc)}</div>
+        <div><b>Account Holder's Name:</b> ${esc(bank.holder)}</div>
+      </div>` : '<div></div>'}
+      <div class="iv-sign">
+        <div class="iv-for">For: ${esc(b.name)}</div>
+        ${b.signature ? `<img src="${b.signature}" alt="signature">` : ''}
+        <div class="iv-signer">${esc(b.signName || '')}</div>
+      </div>
     </div>
   </div>`;
 }
