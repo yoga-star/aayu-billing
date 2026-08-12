@@ -47,21 +47,33 @@ function showUnlock() {
   document.body.appendChild(el);
   setTimeout(() => $('#unlockPin').focus(), 80);
 }
+async function decryptSeed(pass) {
+  const b = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const mat = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b(SEED_ENC.salt), iterations: 150000, hash: 'SHA-256' }, mat, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b(SEED_ENC.iv) }, key, b(SEED_ENC.ct));
+  localStorage.setItem(LS_KEY, new TextDecoder().decode(pt));
+}
 async function unlock() {
   const pass = $('#unlockPin').value.trim();
-  const err = $('#lockErr');
   if (!pass) return;
-  try {
-    const b = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
-    const mat = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
-    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b(SEED_ENC.salt), iterations: 150000, hash: 'SHA-256' }, mat, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
-    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b(SEED_ENC.iv) }, key, b(SEED_ENC.ct));
-    localStorage.setItem(LS_KEY, new TextDecoder().decode(pt));
-    location.reload();
-  } catch (e) {
-    err.textContent = 'Wrong passcode — try again';
+  try { await decryptSeed(pass); location.reload(); }
+  catch (e) {
+    $('#lockErr').textContent = 'Wrong passcode — try again';
     $('#unlockPin').value = ''; $('#unlockPin').focus();
   }
+}
+// Auto-unlock when the key rides along in the link: .../#k=<passcode>
+async function tryAutoUnlock() {
+  if (typeof SEED_ENC === 'undefined') return false;
+  const m = location.hash.match(/[#&]k=([^&]+)/);
+  if (!m) return false;
+  try {
+    await decryptSeed(decodeURIComponent(m[1]));
+    history.replaceState(null, '', location.pathname); // drop the key from the address bar
+    location.reload();
+    return true;
+  } catch (e) { return false; }
 }
 function persist() { localStorage.setItem(LS_KEY, JSON.stringify(db)); }
 
@@ -961,7 +973,7 @@ function refocusRender(view, id) {
 $('#btnAddSale').addEventListener('click', () => openTxnForm('sale'));
 $('#btnAddPurchase').addEventListener('click', () => openTxnForm('purchase'));
 (function init() {
-  if (!db) { showUnlock(); return; }
+  if (!db) { tryAutoUnlock().then(ok => { if (!ok) showUnlock(); }); return; }
   $('#firmName').textContent = db.business.name;
   $('#firmPhone').textContent = db.business.phone;
   $('#firmAvatar').textContent = db.business.name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
