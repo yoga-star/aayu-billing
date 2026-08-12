@@ -426,7 +426,7 @@ renderers.sale = function () {
         <td>${fmtD(i.date)}</td><td>${esc(db.business.invoicePrefix)}-${esc(i.ref)}</td><td>${esc(i.party)}</td>
         <td>${esc(i.paymentType)}</td><td class="num">${fmtM(i.total)}</td><td class="num">${i.balance ? fmtM(i.balance) : '—'}</td>
         <td>${statusChip(i)}</td>
-        <td><button class="btn-ghost btn" onclick="event.stopPropagation();printInvoice(${i.id})" title="Print">🖨</button></td></tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">No invoices in this range</td></tr>'}</tbody>
+        <td><button class="btn-ghost btn" onclick="event.stopPropagation();printInvoice(${i.id})" title="Print">🖨</button><button class="btn-ghost btn" onclick="event.stopPropagation();deleteTxn(${i.id},'sale')" title="Delete">🗑</button></td></tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">No invoices in this range</td></tr>'}</tbody>
     </table></div>`;
 };
 
@@ -752,11 +752,31 @@ function invoiceHTML(inv, kind) {
   </div>`;
 }
 function findTxn(id, kind) { return (kind === 'purchase' ? db.purchases : db.invoices).find(i => i.id === id); }
+function deleteTxn(id, kind) {
+  const isSale = kind !== 'purchase';
+  const coll = isSale ? db.invoices : db.purchases;
+  const inv = coll.find(i => i.id === id); if (!inv) return;
+  const label = (isSale ? db.business.invoicePrefix + '-' : 'PB-') + inv.ref;
+  if (!confirm(`Delete ${isSale ? 'invoice' : 'purchase'} ${label} — ${inv.party}, ${fmtM(inv.total)}?\n\nItem stock and the party balance will be adjusted back. This cannot be undone.`)) return;
+  // reverse stock movement
+  inv.lines.forEach(l => { const it = itemById(l.itemId); if (it) it.stock = +(it.stock + (isSale ? l.qty : -l.qty)).toFixed(2); });
+  // reverse the unpaid portion on the party ledger
+  const p = partyById(inv.partyId);
+  if (p && inv.balance) p.balance = +(p.balance - (isSale ? inv.balance : -inv.balance)).toFixed(2);
+  coll.splice(coll.indexOf(inv), 1);
+  // free the number again if this was the latest invoice
+  const c = isSale ? 'sale' : 'purchase';
+  if (String(db.counters[c] - 1) === String(inv.ref)) db.counters[c]--;
+  persist(); closeModal(); toast(label + ' deleted');
+  showView(currentView);
+}
 function viewInvoice(id, kind) {
   const inv = findTxn(id, kind); if (!inv) return;
   openModal(modalHead((kind === 'purchase' ? 'Purchase PB-' : 'Invoice ' + db.business.invoicePrefix + '-') + inv.ref) +
     invoiceHTML(inv, kind) +
-    `<div class="modal-foot"><button class="btn btn-outline" onclick="closeModal()">Close</button>
+    `<div class="modal-foot">
+     <button class="btn btn-outline" style="margin-right:auto;color:var(--red);border-color:var(--red)" onclick="deleteTxn(${id},'${kind || 'sale'}')">Delete</button>
+     <button class="btn btn-outline" onclick="closeModal()">Close</button>
      <button class="btn btn-red" onclick="printInvoice(${id},'${kind || 'sale'}')">🖨 Print</button></div>`, true);
 }
 function printInvoice(id, kind) {
