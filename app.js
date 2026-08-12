@@ -754,7 +754,7 @@ function setLine(i, k, v) { const l = txn.lines[i]; l[k] = v; l.amount = +(l.qty
 function partyPick(q) {
   txn.partyName = q; txn.partyId = null;
   const drop = $('#partyDrop'); const ql = q.toLowerCase();
-  const hits = db.parties.filter(p => p.name.toLowerCase().includes(ql)).slice(0, 8);
+  const hits = db.parties.filter(p => p.name.toLowerCase().includes(ql));
   drop.innerHTML = hits.map(p => `<div class="pd-item" onmousedown="chooseParty(${p.id})"><span>${esc(p.name)}</span><span class="m">${esc(p.phone)}</span></div>`).join('') +
     (q.trim() && !hits.some(h => h.name.toLowerCase() === ql) ? `<div class="pd-new" onmousedown="quickAddParty()">＋ Add "${esc(q.trim())}" as new party</div>` : '');
   drop.classList.toggle('open', !!(hits.length || q.trim()));
@@ -770,7 +770,7 @@ function quickAddParty() {
 function itemPick(i, q) {
   const l = txn.lines[i]; l.name = q; l.itemId = null;
   const drop = $('#itemDrop_' + i); const ql = q.toLowerCase();
-  const hits = db.items.filter(it => it.name.toLowerCase().includes(ql)).slice(0, 8);
+  const hits = db.items.filter(it => it.name.toLowerCase().includes(ql));
   drop.innerHTML = hits.map(it => `<div class="pd-item" onmousedown="chooseItem(${i},${it.id})"><span>${esc(it.name)}</span><span class="m">${fmtM(it.salePrice)} · stk ${it.stock}</span></div>`).join('') +
     (q.trim() && !hits.some(h => h.name.toLowerCase() === ql) ? `<div class="pd-new" onmousedown="quickAddItem(${i})">＋ Add "${esc(q.trim())}" as new item</div>` : '');
   drop.classList.toggle('open', !!(hits.length || q.trim()));
