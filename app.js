@@ -616,7 +616,7 @@ function printReport() {
     <div class="doc"><div class="t">${REPORT_TITLES[reportView.kind].toUpperCase()}</div><div class="m">${reportView.from || 'start'} → ${reportView.to || 'today'}</div></div></div>
     <table class="inv-lines" style="margin-top:16px"><thead><tr>${d.head.map((h, i) => `<th class="${d.num.includes(i) ? 'num' : ''}">${h}</th>`).join('')}</tr></thead>
     <tbody>${d.rows.map(r => `<tr>${r.map(cell).join('')}</tr>`).join('')}<tr style="font-weight:700">${d.foot.map(cell).join('')}</tr></tbody></table></div>`;
-  doPrint();
+  doPrint(REPORT_TITLES[reportView.kind].replace(/\s+/g, ' ') + '_' + fmtDMY(todayISO()).replace(/-/g, '_'));
 }
 
 /* ================= SETTINGS ================= */
@@ -803,7 +803,14 @@ function viewInvoice(id, kind) {
      <button class="btn btn-outline" onclick="closeModal()">Close</button>
      <button class="btn btn-red" onclick="printInvoice(${id},'${kind || 'sale'}')">🖨 Print</button></div>`, true);
 }
-function doPrint() { // wait for images (signature) to decode before opening the print dialog
+function doPrint(fileName) { // wait for images (signature) to decode before opening the print dialog
+  const prev = document.title;
+  if (fileName) { // the page title becomes the suggested save-as-PDF file name
+    document.title = fileName;
+    const restore = () => { document.title = prev; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
+    setTimeout(restore, 60000);
+  }
   const imgs = [...document.querySelectorAll('#printArea img')];
   Promise.all(imgs.map(im => (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(r => { im.onload = im.onerror = r; })))
     .then(() => setTimeout(() => window.print(), 60));
@@ -811,7 +818,9 @@ function doPrint() { // wait for images (signature) to decode before opening the
 function printInvoice(id, kind) {
   const inv = findTxn(id, kind); if (!inv) return;
   $('#printArea').innerHTML = invoiceHTML(inv, kind);
-  doPrint();
+  const [y, m, d] = inv.date.split('-');
+  const name = (kind === 'purchase' ? 'Purchase Bill_PB-' : 'Tax Invoice_' + db.business.invoicePrefix + '-') + inv.ref + '_' + d + '_' + m + '_' + y.slice(2);
+  doPrint(name);
 }
 
 /* ================= ADD SALE / PURCHASE FORM ================= */
