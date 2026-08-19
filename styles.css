@@ -275,10 +275,13 @@ table.iv-items { width: 100%; border-collapse: collapse; font-size: 12.5px; colo
 
 #printArea { display: none; }
 @media print {
-  body > .app, .modal-backdrop, .txn-overlay, .toast { display: none !important; }
+  /* zero page margins remove the browser's URL/date header-footer;
+     the invoice carries its own paper margin instead */
+  @page { size: A4; margin: 0; }
+  body > .app, .modal-backdrop, .txn-overlay, .toast, .lock-screen { display: none !important; }
+  html, body { margin: 0 !important; padding: 0 !important; background: #fff; }
   #printArea { display: block !important; }
-  #printArea .inv { padding: 0; }
-  body { background: #fff; }
+  #printArea .inv { padding: 14mm 12mm 10mm; }
 }
 
 /* ================= REPORTS ================= */
