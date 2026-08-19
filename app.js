@@ -18,6 +18,18 @@ function loadDB() {
         d.business.terms = d.business.terms || 'Thank you for your purchase!';
         localStorage.setItem(LS_KEY, JSON.stringify(d));
       }
+      // one-time fix: the running series continues from SR145 → next is SR146.
+      // (The backup also held Vyapar's old series reaching 277, which briefly set
+      // the counter to 278. Renumber any bills made under that wrong series.)
+      if (d.counters && !d._fix146) {
+        const wrong = d.invoices.filter(i => parseInt(i.ref, 10) >= 278)
+          .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+        let n = 146;
+        wrong.forEach(i => { i.ref = String(n++); });
+        d.counters.sale = n;
+        d._fix146 = true;
+        localStorage.setItem(LS_KEY, JSON.stringify(d));
+      }
       return d;
     }
   } catch (e) { console.warn('load failed', e); }
