@@ -604,7 +604,7 @@ function printReport() {
     <div class="doc"><div class="t">${REPORT_TITLES[reportView.kind].toUpperCase()}</div><div class="m">${reportView.from || 'start'} → ${reportView.to || 'today'}</div></div></div>
     <table class="inv-lines" style="margin-top:16px"><thead><tr>${d.head.map((h, i) => `<th class="${d.num.includes(i) ? 'num' : ''}">${h}</th>`).join('')}</tr></thead>
     <tbody>${d.rows.map(r => `<tr>${r.map(cell).join('')}</tr>`).join('')}<tr style="font-weight:700">${d.foot.map(cell).join('')}</tr></tbody></table></div>`;
-  window.print();
+  doPrint();
 }
 
 /* ================= SETTINGS ================= */
@@ -791,10 +791,15 @@ function viewInvoice(id, kind) {
      <button class="btn btn-outline" onclick="closeModal()">Close</button>
      <button class="btn btn-red" onclick="printInvoice(${id},'${kind || 'sale'}')">🖨 Print</button></div>`, true);
 }
+function doPrint() { // wait for images (signature) to decode before opening the print dialog
+  const imgs = [...document.querySelectorAll('#printArea img')];
+  Promise.all(imgs.map(im => (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(r => { im.onload = im.onerror = r; })))
+    .then(() => setTimeout(() => window.print(), 60));
+}
 function printInvoice(id, kind) {
   const inv = findTxn(id, kind); if (!inv) return;
   $('#printArea').innerHTML = invoiceHTML(inv, kind);
-  window.print();
+  doPrint();
 }
 
 /* ================= ADD SALE / PURCHASE FORM ================= */
